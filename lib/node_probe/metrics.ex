@@ -125,8 +125,8 @@ defmodule NodeProbe.Metrics do
   # ---------------------------------------------------------------------------
 
   def record_block_arrival(height, hash) do
-    ts = timestamp_s()
-    :ets.insert(@table, {{:block_arrival, height}, %{hash: hash, ts: ts}})
+    ts_ms = System.monotonic_time(:millisecond)
+    :ets.insert(@table, {{:block_arrival, height}, %{hash: hash, ts: ts_ms}})
   end
 
   def recent_block_arrivals(count \\ 10) do

@@ -1,34 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
-    <.live_title default="NodeProbe" suffix=" · Phoenix Framework" phx-no-format>{assigns[:page_title]}</.live_title>
+    <.live_title default="node-probe" suffix=" · node-probe">{assigns[:page_title]}</.live_title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
     <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>
-    <script>
-      (() => {
-        const setTheme = (theme) => {
-          if (theme === "system") {
-            localStorage.removeItem("phx:theme");
-            document.documentElement.removeAttribute("data-theme");
-          } else {
-            localStorage.setItem("phx:theme", theme);
-            document.documentElement.setAttribute("data-theme", theme);
-          }
-        };
-        if (!document.documentElement.hasAttribute("data-theme")) {
-          setTheme(localStorage.getItem("phx:theme") || "system");
-        }
-        window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"));
-        
-        window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
-      })();
-    </script>
   </head>
-  <body>
-    {@inner_content}
+  <body class="np-body">
+    <div class="np-shell">
+      <nav class="np-sidebar">
+        <div class="np-logo">
+          <span class="logo-mark">⬡</span>
+          <span class="logo-text">node-probe</span>
+        </div>
+        <ul class="np-nav">
+          <li><a href="/" class="nav-item"><span class="nav-icon">◉</span><span class="nav-label">Pulse</span></a></li>
+          <li><a href="/block" class="nav-item"><span class="nav-icon">⬜</span><span class="nav-label">Block</span></a></li>
+          <li><a href="/peers" class="nav-item"><span class="nav-icon">⬡</span><span class="nav-label">Peers</span></a></li>
+          <li><a href="/mempool" class="nav-item"><span class="nav-icon">≋</span><span class="nav-label">Mempool</span></a></li>
+          <li><a href="/io" class="nav-item"><span class="nav-icon">⌗</span><span class="nav-label">I/O</span></a></li>
+          <li><a href="/anomalies" class="nav-item"><span class="nav-icon">⚡</span><span class="nav-label">Anomalies</span></a></li>
+        </ul>
+      </nav>
+      <main class="np-main">
+        {@inner_content}
+      </main>
+    </div>
   </body>
 </html>
