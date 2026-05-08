@@ -12,6 +12,8 @@ defmodule NodeProbe.Application do
       {DNSCluster, query: Application.get_env(:node_probe, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: NodeProbe.PubSub},
       {Finch, name: NodeProbe.Finch},
+      NodeProbe.Metrics,
+      NodeProbe.Aggregator,
       NodeProbeWeb.Endpoint
     ]
 
