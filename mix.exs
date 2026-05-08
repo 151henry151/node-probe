@@ -10,6 +10,7 @@ defmodule NodeProbe.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
+      releases: releases(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader]
     ]
@@ -72,6 +73,19 @@ defmodule NodeProbe.MixProject do
   #     $ mix setup
   #
   # See the documentation for `Mix` for more info on aliases.
+  defp releases do
+    [
+      node_probe: [
+        include_executables_for: [:unix],
+        steps: [:assemble, :tar],
+        overlays: [
+          {"priv/ebpf/target/release/node-probe-loader",
+           "bin/node-probe-loader"}
+        ]
+      ]
+    ]
+  end
+
   defp aliases do
     [
       setup: ["deps.get", "assets.setup", "assets.build"],

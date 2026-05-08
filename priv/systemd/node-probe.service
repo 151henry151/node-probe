@@ -1,0 +1,36 @@
+[Unit]
+Description=node-probe Bitcoin node observatory
+After=network.target bitcoind.service
+Wants=bitcoind.service
+
+[Service]
+Type=exec
+User=bitcoin
+Group=bitcoin
+WorkingDirectory=/opt/node-probe
+ExecStart=/opt/node-probe/bin/node_probe start
+ExecStop=/opt/node-probe/bin/node_probe stop
+Restart=on-failure
+RestartSec=5s
+
+# Environment — adjust as needed
+Environment=PHX_SERVER=true
+Environment=PORT=4000
+Environment=SECRET_KEY_BASE=CHANGE_ME_run_mix_phx.gen.secret
+Environment=BITCOIN_RPC_URL=http://127.0.0.1:8332
+Environment=BITCOIN_COOKIE_PATH=/home/bitcoin/.bitcoin/.cookie
+Environment=EBPF_LOADER_PATH=/opt/node-probe/bin/node-probe-loader
+Environment=EBPF_ENABLED=true
+
+# eBPF loader requires CAP_BPF and CAP_PERFMON
+# Grant these to the loader binary instead of running node-probe as root:
+#   sudo setcap cap_bpf,cap_perfmon+ep /opt/node-probe/bin/node-probe-loader
+AmbientCapabilities=CAP_BPF CAP_PERFMON
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=node-probe
+
+[Install]
+WantedBy=multi-user.target
