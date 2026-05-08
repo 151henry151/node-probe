@@ -1,0 +1,23 @@
+[package]
+name = "node-probe-ebpf"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aya-ebpf = "0.1"
+aya-log-ebpf = "0.1"
+
+[[bin]]
+name = "node-probe-ebpf"
+path = "src/main.rs"
+
+[lib]
+name = "node_probe_ebpf_types"
+path = "src/types.rs"
+
+[profile.release]
+lto = true
+opt-level = 3
+
+[profile.dev]
+lto = false
