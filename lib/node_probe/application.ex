@@ -11,9 +11,7 @@ defmodule NodeProbe.Application do
       NodeProbeWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:node_probe, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: NodeProbe.PubSub},
-      # Start a worker by calling: NodeProbe.Worker.start_link(arg)
-      # {NodeProbe.Worker, arg},
-      # Start to serve requests, typically the last entry
+      {Finch, name: NodeProbe.Finch},
       NodeProbeWeb.Endpoint
     ]
 
