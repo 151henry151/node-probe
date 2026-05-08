@@ -1,10 +1,10 @@
 # node-probe
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](CHANGELOG.md)
 
 A Bitcoin node observatory that combines eBPF kernel-level behavioral tracing of `bitcoind`
-with Bitcoin RPC/P2P semantic data — enriched via the `bitcoinex` Elixir library — streamed
-live to a Phoenix LiveView dashboard.
+with Bitcoin RPC/P2P semantic data, streamed live to a Phoenix LiveView dashboard.
 
 Your node, from two simultaneous angles: **what the kernel sees** (raw behavioral truth) and
 **what Bitcoin sees** (semantic meaning).
@@ -17,7 +17,7 @@ Your node, from two simultaneous angles: **what the kernel sees** (raw behaviora
                         ┌─────────────────────────────────────────────┐
                         │                  bitcoind                    │
                         └──────┬──────────────────────┬───────────────┘
-                               │ kernel events         │ JSON-RPC / P2P
+                               │ kernel events         │ JSON-RPC
               ┌────────────────▼──────────┐   ┌───────▼───────────────┐
               │   node-probe-loader       │   │    RpcCollector        │
               │   (Rust/Aya eBPF)         │   │    (GenServer)         │
@@ -51,11 +51,14 @@ Your node, from two simultaneous angles: **what the kernel sees** (raw behaviora
 
 ## Prerequisites
 
-- Linux kernel >= 5.8 (eBPF ring buffer, `bpf_get_stackid`)
-- Elixir 1.15+ / OTP 26+
-- Rust nightly toolchain (for eBPF kernel programs via `aya-ebpf`)
-- `bitcoind` running on the same host
-- The eBPF loader must have `CAP_BPF` and `CAP_PERFMON` capabilities, or run as root
+| Requirement | Version | Notes |
+|---|---|---|
+| Linux kernel | >= 5.8 | eBPF ring buffer, `bpf_get_stackid` |
+| Elixir | >= 1.15 | OTP 26+ |
+| Rust | nightly | For eBPF kernel programs (`aya-ebpf`, `no_std`) |
+| `bpf-linker` | latest | `cargo install bpf-linker` |
+| `bitcoind` | any | Must be running on the same host |
+| Capabilities | `CAP_BPF`, `CAP_PERFMON` | Or run loader as root |
 
 ---
 
@@ -67,102 +70,155 @@ git clone https://github.com/151henry151/node-probe.git
 cd node-probe
 mix deps.get
 
-# 2. Build eBPF programs (requires Rust nightly)
+# 2. Install Rust nightly + bpf-linker (one-time setup)
+rustup toolchain install nightly --component rust-src
+cargo install bpf-linker
+
+# 3. Build eBPF programs and loader
 make ebpf
 
-# 3. Configure (see Configuration Reference below)
+# 4. Configure Bitcoin RPC connection
 export BITCOIN_RPC_URL=http://127.0.0.1:8332
-export BITCOIN_RPC_USER=bitcoin
-export BITCOIN_RPC_PASS=yourpassword
+export BITCOIN_COOKIE_PATH=~/.bitcoin/.cookie   # or use user/pass:
+# export BITCOIN_RPC_USER=bitcoin
+# export BITCOIN_RPC_PASS=yourpassword
 
-# 4. Start the dashboard
+# 5. Start the dashboard
 mix phx.server
-# Visit http://localhost:4000
+# Open http://localhost:4000
 ```
+
+---
+
+## Dashboard Views
+
+| Route | View | Description |
+|---|---|---|
+| `/` | **Pulse** | Node heartbeat: height, peers, mempool, eBPF status |
+| `/block` | **Block** | Block arrival theater with fee histogram |
+| `/peers` | **Peers** | Live peer table, bytes in/out |
+| `/mempool` | **Mempool** | Fee histogram, tx rate, size history |
+| `/io` | **I/O** | File access heatmap, latency distribution |
+| `/anomalies` | **Anomalies** | Chronological event feed |
 
 ---
 
 ## Configuration Reference
 
-All configuration is via environment variables. Defaults are shown.
+All configuration is via environment variables at runtime.
 
 | Variable | Default | Description |
 |---|---|---|
-| `BITCOIN_RPC_URL` | `http://127.0.0.1:8332` | Bitcoin Core RPC endpoint |
-| `BITCOIN_RPC_USER` | `bitcoin` | RPC username (ignored if cookie auth is used) |
-| `BITCOIN_RPC_PASS` | _(empty)_ | RPC password (ignored if cookie auth is used) |
+| `BITCOIN_RPC_URL` | `http://127.0.0.1:8332` | Bitcoin Core JSON-RPC endpoint |
+| `BITCOIN_RPC_USER` | `bitcoin` | RPC username (cookie auth preferred) |
+| `BITCOIN_RPC_PASS` | _(empty)_ | RPC password |
 | `BITCOIN_COOKIE_PATH` | `~/.bitcoin/.cookie` | Path to `.cookie` file for cookie auth |
 | `EBPF_LOADER_PATH` | `./priv/ebpf/target/release/node-probe-loader` | Path to compiled eBPF loader binary |
-| `EBPF_ENABLED` | `true` | Set to `false` to disable eBPF tracing entirely |
+| `EBPF_ENABLED` | `true` | Set `false` to disable eBPF tracing entirely |
 | `P2P_TAP_ENABLED` | `false` | Enable raw P2P message tapping |
-| `RPC_POLL_MS` | `2000` | How often (ms) to poll Bitcoin RPC |
+| `RPC_POLL_MS` | `2000` | RPC polling interval in milliseconds |
 | `LITE_MODE` | `false` | See Lite Mode below |
 | `PORT` | `4000` | HTTP port for the Phoenix server |
-| `SECRET_KEY_BASE` | _(dev default)_ | Phoenix secret key (required in prod) |
+| `SECRET_KEY_BASE` | _(dev only)_ | Required in production — generate with `mix phx.gen.secret` |
 
 ---
 
 ## Lite Mode
 
-Set `LITE_MODE=true` for Raspberry Pi or other constrained hardware.
+Set `LITE_MODE=true` for Raspberry Pi or constrained hardware.
 
-Lite mode disables:
-- **CPU flame graph sampling** — the 99Hz perf_event eBPF sampler is not loaded
-- **P2P message tapping** — raw P2P stream capture is skipped
-- **High-frequency eBPF syscall tracing** — only coarse-grained syscall events are emitted
+**Disabled in lite mode:**
+- CPU flame graph sampling — the 99Hz `perf_event` eBPF sampler is not loaded
+- P2P message tapping
+- High-frequency eBPF syscall tracing
 
-The dashboard remains fully functional; you simply lose the CPU profiling view and fine-grained
-syscall resolution.
+The dashboard remains fully functional; you lose CPU profiling and fine-grained syscall data.
 
 ```bash
+# Development
 LITE_MODE=true mix phx.server
-# or for a release:
+
+# Production release
 make release-lite
+```
+
+---
+
+## Building
+
+```bash
+make all          # build eBPF programs + compile Elixir
+make ebpf         # build only eBPF workspace (kernel programs + loader)
+make ebpf-lite    # build eBPF workspace in lite mode
+make elixir       # deps.get + compile
+make test         # run Rust unit tests + Elixir test suite
+make release      # MIX_ENV=prod mix release (creates tarball)
+make release-lite # LITE_MODE=true production release
+make clean        # cargo clean + mix clean
 ```
 
 ---
 
 ## Deployment
 
-### Requirements
+### eBPF Capabilities
 
-- Linux kernel >= 5.8 on the same host as `bitcoind`
-- The eBPF loader binary (`node-probe-loader`) needs `CAP_BPF` and `CAP_PERFMON`:
-  ```bash
-  sudo setcap cap_bpf,cap_perfmon+ep ./priv/ebpf/target/release/node-probe-loader
-  ```
-  Or run node-probe as root in a trusted environment.
-
-### Systemd
-
-A unit file is provided at `priv/systemd/node-probe.service`. Copy and adjust:
+The loader binary needs kernel privileges. Grant capabilities instead of running as root:
 
 ```bash
-sudo cp priv/systemd/node-probe.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now node-probe
+sudo setcap cap_bpf,cap_perfmon+ep ./priv/ebpf/target/release/node-probe-loader
 ```
+
+Or set `AmbientCapabilities=CAP_BPF CAP_PERFMON` in the systemd unit (see below).
 
 ### Mix Release
 
 ```bash
-make release        # standard build
-make release-lite   # Raspberry Pi / low-power build
+make release
+# Release tarball: _build/prod/node_probe-0.1.0.tar.gz
+# Extract to /opt/node-probe and run: bin/node_probe start
 ```
 
-The release tarball is self-contained — no Elixir/Erlang runtime needed on the target.
+The release is self-contained — no Elixir/Erlang runtime required on the target.
+
+### Systemd
+
+A unit file is provided at `priv/systemd/node-probe.service`:
+
+```bash
+sudo cp priv/systemd/node-probe.service /etc/systemd/system/
+# Edit /etc/systemd/system/node-probe.service — set SECRET_KEY_BASE, paths, etc.
+sudo systemctl daemon-reload
+sudo systemctl enable --now node-probe
+sudo journalctl -fu node-probe   # tail logs
+```
+
+---
+
+## Testing
+
+```bash
+mix test                  # full Elixir test suite
+mix test --cover          # with coverage report
+mix test --stale          # only tests affected by recent changes
+cd priv/ebpf && cargo test --lib --package node-probe-ebpf
+cd priv/ebpf && cargo test --package node-probe-loader
+```
+
+Coverage target: >80% line coverage on all Elixir modules.
 
 ---
 
 ## Contributing
 
-1. Fork the repo and create a feature branch.
+1. Fork and create a feature branch from `main`.
 2. Follow TDD — write tests alongside every module.
-3. Run `mix precommit` before pushing (compiles with warnings-as-errors, formats, runs tests).
-4. Open a pull request against `main`.
+3. Run `mix precommit` before pushing (compile with warnings-as-errors, format, test).
+4. Open a pull request. Keep commits bisectable — one logical change per commit.
 
 ---
 
 ## License
 
-GPL v3. See [LICENSE](LICENSE).
+node-probe is free software, licensed under the GNU General Public License v3.0 or later.
+See the [LICENSE](LICENSE) file (to be added) or https://www.gnu.org/licenses/gpl-3.0.html.
