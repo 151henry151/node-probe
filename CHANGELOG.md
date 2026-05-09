@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-05-09
+
+### Fixed
+
+- Register **LiveView chart hooks** (`FeeHistogram`, `Sparkline`) in **`assets/js/chart_hooks.js`** — the generated **phoenix-colocated** bundle was empty, so block fee charts and mempool sparklines never rendered.
+- Convert **`mempoolminfee`** from **BTC/kB** to **sat/vB** for display and format without scientific notation via **`NodeProbeWeb.FeeFormat`**.
+- **I/O** LiveView: aggregate **all** syscall types (read/write/openat/...) with clearer empty-state copy; keep path-prefix and recent files when the loader provides **`filename`**.
+- **Rust loader**: include optional **`filename`** in syscall JSON and parse the path payload from the ring buffer when present.
+
 ## [0.1.3] - 2026-05-09
 
 ### Added

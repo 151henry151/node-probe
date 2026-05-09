@@ -23,6 +23,7 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/node_probe"
+import {FeeHistogram, Sparkline} from "./chart_hooks.js"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
@@ -34,10 +35,11 @@ try {
   prefix = new URL(scriptSrc, window.location.href).pathname.replace(/\/assets\/js\/[^/]+$/, "")
 } catch (_e) {}
 const liveSocketPath = `${prefix}/live`
+const chartHooks = {FeeHistogram, Sparkline}
 const liveSocket = new LiveSocket(liveSocketPath, Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  hooks: {...colocatedHooks, ...chartHooks},
 })
 
 // Show progress bar on live navigation and form submits

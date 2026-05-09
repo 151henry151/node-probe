@@ -2,6 +2,7 @@ defmodule NodeProbeWeb.MempoolLive do
   use NodeProbeWeb, :live_view
 
   alias NodeProbe.Metrics
+  alias NodeProbeWeb.FeeFormat
 
   @impl true
   def mount(_params, _session, socket) do
@@ -15,7 +16,7 @@ defmodule NodeProbeWeb.MempoolLive do
        tx_count: 0,
        size_mb: 0.0,
        total_fees_btc: 0.0,
-       min_fee_rate: 0,
+       min_fee_sat_vb_display: "—",
        fee_histogram: %{},
        mempool_history: []
      )}
@@ -26,7 +27,9 @@ defmodule NodeProbeWeb.MempoolLive do
     size_bytes = info["bytes"] || 0
     size_mb = Float.round(size_bytes / 1_000_000, 2)
     tx_count = info["size"] || 0
-    min_fee_rate = info["mempoolminfee"] || 0
+    raw_min = info["mempoolminfee"] || 0
+    min_sat_vb = FeeFormat.mempool_min_fee_sat_vb(to_number(raw_min))
+    min_display = FeeFormat.format_sat_per_vb(min_sat_vb)
 
     history = Metrics.mempool_history()
 
@@ -34,12 +37,24 @@ defmodule NodeProbeWeb.MempoolLive do
      assign(socket,
        tx_count: tx_count,
        size_mb: size_mb,
-       min_fee_rate: min_fee_rate,
+       min_fee_sat_vb_display: min_display,
        mempool_history: history
      )}
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
+
+  defp to_number(v) when is_integer(v), do: v * 1.0
+  defp to_number(v) when is_float(v), do: v
+
+  defp to_number(v) when is_binary(v) do
+    case Float.parse(v) do
+      {f, _} -> f
+      :error -> 0.0
+    end
+  end
+
+  defp to_number(_), do: 0.0
 
   @impl true
   def render(assigns) do
@@ -56,7 +71,7 @@ defmodule NodeProbeWeb.MempoolLive do
         </div>
         <div class="stat-card">
           <div class="stat-label">Min Fee Rate</div>
-          <div class="stat-value mono">{@min_fee_rate} sat/vB</div>
+          <div class="stat-value mono">{@min_fee_sat_vb_display} sat/vB</div>
         </div>
       </div>
 

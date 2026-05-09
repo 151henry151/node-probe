@@ -11,18 +11,20 @@ defmodule NodeProbeWeb.MempoolLiveTest do
   test "updates tx count and size on mempool event", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/mempool")
 
-    Phoenix.PubSub.broadcast(NodeProbe.PubSub, "node_probe:events", {:aggregated_mempool, %{"size" => 5123, "bytes" => 7_340_032, "mempoolminfee" => 1}})
+    send(view.pid, {:aggregated_mempool, %{"size" => 5123, "bytes" => 7_340_032, "mempoolminfee" => 1}})
 
     rendered = render(view)
     assert rendered =~ "5123"
     assert rendered =~ "7.34 MB"
   end
 
-  test "displays min fee rate", %{conn: conn} do
+  test "displays min fee rate in sat/vB (Core reports BTC/kB)", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/mempool")
 
-    Phoenix.PubSub.broadcast(NodeProbe.PubSub, "node_probe:events", {:aggregated_mempool, %{"size" => 100, "bytes" => 100_000, "mempoolminfee" => 3}})
+    # 0.00001 BTC/kB => 1 sat/vB
+    send(view.pid, {:aggregated_mempool, %{"size" => 100, "bytes" => 100_000, "mempoolminfee" => 0.00001}})
 
-    assert render(view) =~ "3 sat/vB"
+    rendered = render(view)
+    assert rendered =~ "1.00 sat/vB"
   end
 end

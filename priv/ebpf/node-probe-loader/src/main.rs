@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use serde::Serialize;
-use std::io::{self, BufRead, Write};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
@@ -31,6 +31,8 @@ enum OutputEvent {
         pid: u32,
         syscall: String,
         ts: u64,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        filename: String,
     },
     Latency {
         pid: u32,
@@ -129,6 +131,17 @@ pub fn emit_event(event: &OutputEvent) {
         let stdout = io::stdout();
         let mut out = stdout.lock();
         let _ = writeln!(out, "{json}");
+    }
+}
+
+/// Kernel `SyscallEvent` stores an optional path payload after the fixed header (see `types.rs`).
+fn parse_syscall_filename(item: &[u8]) -> String {
+    if item.len() >= 280 {
+        let raw = &item[24..280];
+        let end = raw.iter().position(|&b| b == 0).unwrap_or(raw.len());
+        String::from_utf8_lossy(&raw[..end]).to_string()
+    } else {
+        String::new()
     }
 }
 
@@ -264,10 +277,12 @@ async fn load_and_run(pid: u32, ebpf_bytes: &[u8], lite: bool) -> Result<()> {
                     let syscall_pid = u32::from_ne_bytes(pid_bytes);
                     let syscall_nr = u32::from_ne_bytes(nr_bytes);
                     let ts = u64::from_ne_bytes(ts_bytes);
+                    let filename = parse_syscall_filename(item.as_ref());
                     emit_event(&OutputEvent::Syscall {
                         pid: syscall_pid,
                         syscall: syscall_name(syscall_nr).to_string(),
                         ts,
+                        filename,
                     });
                 }
             }
@@ -372,11 +387,39 @@ mod tests {
             pid: 12345,
             syscall: "openat".to_string(),
             ts: 1_716_000_000_000_000_000,
+            filename: String::new(),
         };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains("\"type\":\"syscall\""));
         assert!(json.contains("\"pid\":12345"));
         assert!(json.contains("\"syscall\":\"openat\""));
+        assert!(!json.contains("\"filename\""));
+    }
+
+    #[test]
+    fn syscall_event_json_includes_nonempty_filename() {
+        let event = OutputEvent::Syscall {
+            pid: 1,
+            syscall: "openat".to_string(),
+            ts: 0,
+            filename: "/var/lib/bitcoin/.bitcoin/blocks/foo.dat".to_string(),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"filename\":\"/var/lib/bitcoin/.bitcoin/blocks/foo.dat\""));
+    }
+
+    #[test]
+    fn parse_syscall_filename_reads_embedded_path() {
+        let mut buf = vec![0u8; 280];
+        buf[0..4].copy_from_slice(&12345u32.to_ne_bytes());
+        buf[8..12].copy_from_slice(&257u32.to_ne_bytes());
+        buf[16..24].copy_from_slice(&99u64.to_ne_bytes());
+        let path = b"/blocks/blk000.dat";
+        buf[24..24 + path.len()].copy_from_slice(path);
+        assert_eq!(
+            parse_syscall_filename(&buf),
+            "/blocks/blk000.dat".to_string()
+        );
     }
 
     #[test]
