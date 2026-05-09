@@ -167,6 +167,8 @@ sudo setcap cap_bpf,cap_perfmon+ep ./priv/ebpf/target/release/node-probe-loader
 
 Or set `AmbientCapabilities=CAP_BPF CAP_PERFMON` in the systemd unit (see below).
 
+When the loader is spawned as an Erlang **Port**, its **stdout is a pipe**. The loader **`flush`es** stdout after each NDJSON line so the Phoenix **`EbpfCollector`** receives events in real time — without that, lines can sit in a libc block buffer and the dashboard stays empty even while probes fire.
+
 ### Mix Release
 
 ```bash

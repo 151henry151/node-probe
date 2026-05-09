@@ -1,6 +1,6 @@
 defmodule NodeProbeWeb.DashboardLive do
   @moduledoc """
-  Single-page dashboard: chain overview, latest block, mempool, peers, eBPF I/O, and anomaly feeds.
+  Single-page dashboard: chain overview, latest block, mempool, peers, and eBPF I/O.
   """
   use NodeProbeWeb, :live_view
 
@@ -36,7 +36,6 @@ defmodule NodeProbeWeb.DashboardLive do
       mempool_history: [],
       last_block_ts: nil,
       pulse_events: [],
-      anomaly_events: [],
       ebpf_enabled: ebpf_on,
       current_block: nil,
       block_history: [],
@@ -139,8 +138,7 @@ defmodule NodeProbeWeb.DashboardLive do
 
   def handle_info({:anomaly, event}, socket) do
     pulse = [event | socket.assigns.pulse_events] |> Enum.take(12)
-    anomalies = [event | socket.assigns.anomaly_events] |> Enum.take(200)
-    {:noreply, assign(socket, pulse_events: pulse, anomaly_events: anomalies)}
+    {:noreply, assign(socket, pulse_events: pulse)}
   end
 
   def handle_info({:ebpf_event, %{"type" => "syscall"} = event}, socket) do
@@ -287,12 +285,6 @@ defmodule NodeProbeWeb.DashboardLive do
   defp format_bytes(bytes) when is_integer(bytes), do: "#{bytes} B"
   defp format_bytes(_), do: "—"
 
-  defp format_ts(nil), do: "—"
-
-  defp format_ts(ts) when is_integer(ts) do
-    ts |> DateTime.from_unix!() |> Calendar.strftime("%H:%M:%S")
-  end
-
   @impl true
   def render(assigns) do
     assigns =
@@ -324,10 +316,6 @@ defmodule NodeProbeWeb.DashboardLive do
           <span class="dash-meta-item">
             {@peer_count} peers <span class="muted">({@inbound_count}↓ {@outbound_count}↑)</span>
           </span>
-          <span class="dash-meta-item muted">·</span>
-          <span class="dash-meta-item">
-            eBPF <strong>{if @ebpf_enabled, do: "on", else: "off"}</strong>
-          </span>
         </div>
       </header>
 
@@ -354,10 +342,6 @@ defmodule NodeProbeWeb.DashboardLive do
             <div class="stat-value mono">
               {@min_fee_sat_vb_display} <span class="muted">sat/vB</span>
             </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">eBPF</div>
-            <div class="stat-value mono">{if @ebpf_enabled, do: "enabled", else: "disabled"}</div>
           </div>
         </div>
 
@@ -515,7 +499,7 @@ defmodule NodeProbeWeb.DashboardLive do
             </h2>
             <div :if={@io_empty?} class="muted io-empty-hint dash-io-hint">
               <%= if @ebpf_enabled do %>
-                No syscall samples yet — during sync you should see read/write/openat counts here when the loader is attached.
+                No samples yet — with the loader attached to <span class="mono">bitcoind</span>, expect <span class="mono">read</span> / <span class="mono">write</span> syscall counts during sync plus read/write latency from VFS probes. If this never moves, reload the loader (see README).
               <% else %>
                 eBPF disabled (<code class="mono">EBPF_ENABLED=false</code>).
               <% end %>
@@ -549,13 +533,21 @@ defmodule NodeProbeWeb.DashboardLive do
                 </div>
                 <div :if={@path_prefix_counts == %{}} class="muted">No paths captured</div>
               </div>
-              <div class="io-section io-section-span">
+              <div class="io-section">
                 <div class="section-label">Read latency</div>
                 <div :for={{bucket, count} <- @latency_hist_read} class="io-row">
                   <span class="mono">{bucket}</span>
                   <span class="mono">{count}</span>
                 </div>
-                <div :if={@latency_hist_read == %{}} class="muted">No read latency yet</div>
+                <div :if={@latency_hist_read == %{}} class="muted">No read samples yet</div>
+              </div>
+              <div class="io-section">
+                <div class="section-label">Write latency</div>
+                <div :for={{bucket, count} <- @latency_hist_write} class="io-row">
+                  <span class="mono">{bucket}</span>
+                  <span class="mono">{count}</span>
+                </div>
+                <div :if={@latency_hist_write == %{}} class="muted">No write samples yet</div>
               </div>
             </div>
             <div class="recent-files dash-recent-files">
@@ -567,25 +559,6 @@ defmodule NodeProbeWeb.DashboardLive do
                 {event.filename}
               </div>
               <div :if={@recent_file_events == []} class="muted">None yet</div>
-            </div>
-          </section>
-
-          <%!-- Anomalies --%>
-          <section class="dash-section" id="anomalies" aria-labelledby="anomalies-heading">
-            <h2 id="anomalies-heading" class="dash-section-title">Anomaly log</h2>
-            <div class="event-feed dash-anomaly-feed">
-              <div
-                :for={event <- @anomaly_events}
-                class={"event-item severity-#{event[:severity] || :info}"}
-              >
-                <span class="event-ts mono">{format_ts(event[:ts])}</span>
-                <span class={"event-badge badge-#{event[:category]}"}>{event[:category]}</span>
-                <span class={"severity-badge severity-#{event[:severity]}"}>
-                  {event[:severity] || :info}
-                </span>
-                <span class="event-desc">{event[:description]}</span>
-              </div>
-              <div :if={@anomaly_events == []} class="muted">No anomalies yet</div>
             </div>
           </section>
         </div>

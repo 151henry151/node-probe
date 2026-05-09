@@ -126,11 +126,15 @@ pub fn discover_bitcoind_pid(proc_root: &Path) -> Result<u32> {
 // ---------------------------------------------------------------------------
 
 /// Emit a single event as newline-delimited JSON to stdout.
+///
+/// When stdout is a pipe (Erlang **`Port`**), libc uses **block buffering**, so **`writeln!` alone**
+/// can leave lines stuck until the buffer fills — the Elixir **`EbpfCollector`** would see no JSON.
 pub fn emit_event(event: &OutputEvent) {
     if let Ok(json) = serde_json::to_string(event) {
         let stdout = io::stdout();
         let mut out = stdout.lock();
         let _ = writeln!(out, "{json}");
+        let _ = out.flush();
     }
 }
 

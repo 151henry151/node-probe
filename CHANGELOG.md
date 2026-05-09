@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-05-09
+
+### Fixed
+
+- **`node-probe-loader`**: **`flush`** stdout after each JSON line so **`EbpfCollector`** Port (pipe) receives events immediately; unbuffered **`stdout`** was delaying or batching lines so the UI stayed empty.
+
+### Changed
+
+- **`DashboardLive`**: remove overview **eBPF** stat card and header eBPF badge; remove **Anomaly log** section (**`Live pulse`** in overview remains); add **Write latency** histogram next to read; clarify empty I/O hint copy.
+
 ## [0.1.5] - 2026-05-09
 
 ### Changed

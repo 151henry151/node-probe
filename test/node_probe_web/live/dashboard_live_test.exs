@@ -39,7 +39,7 @@ defmodule NodeProbeWeb.DashboardLiveTest do
     assert html =~ "Mempool"
     assert html =~ "Peers"
     assert html =~ "Kernel I/O"
-    assert html =~ "Anomaly log"
+    assert html =~ "Live pulse"
   end
 
   test "legacy paths redirect to dashboard" do
@@ -105,7 +105,18 @@ defmodule NodeProbeWeb.DashboardLiveTest do
     assert rendered =~ "read"
   end
 
-  test "anomaly log receives anomaly events", %{conn: conn} do
+  test "io section aggregates write latency buckets", %{conn: conn} do
+    {:ok, view, _} = live(conn, ~p"/")
+
+    send(
+      view.pid,
+      {:ebpf_event, %{"type" => "latency", "op" => "write", "latency_ns" => 50_000, "bytes" => 4096}}
+    )
+
+    assert render(view) =~ "10-100µs"
+  end
+
+  test "live pulse shows anomaly-style events", %{conn: conn} do
     {:ok, view, _} = live(conn, ~p"/")
 
     send(
