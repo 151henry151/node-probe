@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-05-09
+
+### Added
+
+- **`target/bpfel-unknown-none/release/node-probe-ebpf`** symlink so **`node-probe-loader`** default **`./target/...`** path resolves when the app **`cwd`** is the Elixir project root (loader binary lives under **`priv/ebpf/target/`**).
+
 ## [0.1.2] - 2026-05-09
 
 ### Fixed
