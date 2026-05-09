@@ -20,7 +20,13 @@ defmodule NodeProbe.AggregatorTest do
 
   test "increments syscall metric on ebpf syscall event" do
     before_count = Metrics.syscall_counts()["openat"] || 0
-    Phoenix.PubSub.broadcast(NodeProbe.PubSub, "ebpf:events", {:ebpf_event, %{"type" => "syscall", "syscall" => "openat"}})
+
+    Phoenix.PubSub.broadcast(
+      NodeProbe.PubSub,
+      "ebpf:events",
+      {:ebpf_event, %{"type" => "syscall", "syscall" => "openat"}}
+    )
+
     Process.sleep(100)
 
     after_count = Metrics.syscall_counts()["openat"] || 0
@@ -28,7 +34,12 @@ defmodule NodeProbe.AggregatorTest do
   end
 
   test "records latency metric on ebpf latency event" do
-    Phoenix.PubSub.broadcast(NodeProbe.PubSub, "ebpf:events", {:ebpf_event, %{"type" => "latency", "op" => "read", "latency_ns" => 10_000}})
+    Phoenix.PubSub.broadcast(
+      NodeProbe.PubSub,
+      "ebpf:events",
+      {:ebpf_event, %{"type" => "latency", "op" => "read", "latency_ns" => 10_000}}
+    )
+
     Process.sleep(50)
 
     hist = Metrics.latency_histogram(:read)
@@ -58,19 +69,27 @@ defmodule NodeProbe.AggregatorTest do
   test "publishes aggregated_block and records arrival on rpc block event" do
     Phoenix.PubSub.subscribe(NodeProbe.PubSub, "node_probe:events")
 
-    Phoenix.PubSub.broadcast(NodeProbe.PubSub, "rpc:events", {:block, %{"height" => 840_000, "hash" => "abc123", "tx" => []}})
+    Phoenix.PubSub.broadcast(
+      NodeProbe.PubSub,
+      "rpc:events",
+      {:block, %{"height" => 840_000, "hash" => "abc123", "tx" => []}}
+    )
 
     assert_receive {:aggregated_block, %{"height" => 840_000}}, 1_000
 
     Process.sleep(50)
     arrivals = Metrics.recent_block_arrivals()
-    assert Enum.any?(arrivals, & &1.height == 840_000)
+    assert Enum.any?(arrivals, &(&1.height == 840_000))
   end
 
   test "publishes aggregated_peers on rpc peers event" do
     Phoenix.PubSub.subscribe(NodeProbe.PubSub, "node_probe:events")
 
-    Phoenix.PubSub.broadcast(NodeProbe.PubSub, "rpc:events", {:peers, [%{"id" => 1, "addr" => "1.2.3.4:8333"}]})
+    Phoenix.PubSub.broadcast(
+      NodeProbe.PubSub,
+      "rpc:events",
+      {:peers, [%{"id" => 1, "addr" => "1.2.3.4:8333"}]}
+    )
 
     assert_receive {:aggregated_peers, [%{"id" => 1}]}, 1_000
   end
@@ -78,13 +97,23 @@ defmodule NodeProbe.AggregatorTest do
   test "emits block latency anomaly for second block" do
     Phoenix.PubSub.subscribe(NodeProbe.PubSub, "node_probe:events")
 
-    Phoenix.PubSub.broadcast(NodeProbe.PubSub, "rpc:events", {:block, %{"height" => 840_000, "hash" => "hash_a", "tx" => []}})
+    Phoenix.PubSub.broadcast(
+      NodeProbe.PubSub,
+      "rpc:events",
+      {:block, %{"height" => 840_000, "hash" => "hash_a", "tx" => []}}
+    )
+
     assert_receive {:aggregated_block, _}, 1_000
 
     # Wait a moment so last_block_ts is set
     Process.sleep(100)
 
-    Phoenix.PubSub.broadcast(NodeProbe.PubSub, "rpc:events", {:block, %{"height" => 840_001, "hash" => "hash_b", "tx" => []}})
+    Phoenix.PubSub.broadcast(
+      NodeProbe.PubSub,
+      "rpc:events",
+      {:block, %{"height" => 840_001, "hash" => "hash_b", "tx" => []}}
+    )
+
     assert_receive {:anomaly, %{category: :bitcoin, severity: :info}}, 1_000
   end
 end

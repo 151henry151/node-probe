@@ -17,11 +17,12 @@ defmodule NodeProbeWeb.Router do
   scope "/", NodeProbeWeb do
     pipe_through :browser
 
-    live "/", PulseLive, :index
-    live "/block", BlockLive, :index
-    live "/peers", PeersLive, :index
-    live "/mempool", MempoolLive, :index
-    live "/io", IoLive, :index
-    live "/anomalies", AnomalyLive, :index
+    live "/", DashboardLive, :index
+
+    get "/block", PageController, :dashboard_redirect
+    get "/peers", PageController, :dashboard_redirect
+    get "/mempool", PageController, :dashboard_redirect
+    get "/io", PageController, :dashboard_redirect
+    get "/anomalies", PageController, :dashboard_redirect
   end
 end

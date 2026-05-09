@@ -47,7 +47,10 @@ defmodule NodeProbe.Collectors.EbpfCollector do
   end
 
   def handle_info({port, {:exit_status, status}}, %{port: port} = state) do
-    Logger.warning("EbpfCollector: loader exited with status #{status}, restarting in #{@restart_delay_ms}ms")
+    Logger.warning(
+      "EbpfCollector: loader exited with status #{status}, restarting in #{@restart_delay_ms}ms"
+    )
+
     Process.send_after(self(), :restart, @restart_delay_ms)
     {:noreply, %{state | port: nil}}
   end
@@ -70,7 +73,10 @@ defmodule NodeProbe.Collectors.EbpfCollector do
     %{state | port: port}
   rescue
     e ->
-      Logger.warning("EbpfCollector: failed to open port: #{inspect(e)}, will retry in #{@restart_delay_ms}ms")
+      Logger.warning(
+        "EbpfCollector: failed to open port: #{inspect(e)}, will retry in #{@restart_delay_ms}ms"
+      )
+
       Process.send_after(self(), :restart, @restart_delay_ms)
       %{state | port: nil}
   end

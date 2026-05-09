@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-05-09
+
+### Changed
+
+- Replace multi-route sidebar navigation with **`DashboardLive`** on **`/`**: one scrollable layout (overview, block, mempool, peers, I/O, anomalies).
+- Remove **`PulseLive`**, **`BlockLive`**, **`PeersLive`**, **`MempoolLive`**, **`IoLive`**, **`AnomalyLive`**; consolidate subscriptions and **`handle_info`** into **`NodeProbeWeb.DashboardLive`**.
+- **`root`** layout: drop sidebar shell; sticky compact header + **`assets/css/app.css`** dashboard grid (two columns → stacked on narrow viewports).
+- Legacy **`GET`** **`/block`**, **`/peers`**, **`/mempool`**, **`/io`**, **`/anomalies`** → **`302`** to **`/`** via **`PageController.dashboard_redirect`**.
+
 ## [0.1.4] - 2026-05-09
 
 ### Fixed

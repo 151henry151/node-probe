@@ -79,8 +79,7 @@ defmodule NodeProbe.MixProject do
         include_executables_for: [:unix],
         steps: [:assemble, :tar],
         overlays: [
-          {"priv/ebpf/target/release/node-probe-loader",
-           "bin/node-probe-loader"}
+          {"priv/ebpf/target/release/node-probe-loader", "bin/node-probe-loader"}
         ]
       ]
     ]

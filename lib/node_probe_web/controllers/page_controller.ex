@@ -4,4 +4,8 @@ defmodule NodeProbeWeb.PageController do
   def home(conn, _params) do
     render(conn, :home)
   end
+
+  def dashboard_redirect(conn, _params) do
+    redirect(conn, to: ~p"/")
+  end
 end

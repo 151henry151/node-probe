@@ -123,13 +123,15 @@ defmodule NodeProbe.Aggregator do
       height = block["height"]
 
       if height && gap_s >= 0 do
-        publish({:anomaly,
-          %{
-            category: :bitcoin,
-            severity: :info,
-            description: "Block #{height} arrived after #{gap_s}s gap",
-            ts: now
-          }})
+        publish(
+          {:anomaly,
+           %{
+             category: :bitcoin,
+             severity: :info,
+             description: "Block #{height} arrived after #{gap_s}s gap",
+             ts: now
+           }}
+        )
       end
     end
 

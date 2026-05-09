@@ -161,6 +161,9 @@ defmodule NodeProbe.Metrics do
 
   defp purge_old_mempool do
     cutoff_ms = System.monotonic_time(:millisecond) - @mempool_window_s * 1_000
-    :ets.select_delete(@table, [{{{:mempool_history, :"$1", :_}, :_}, [{:<, :"$1", cutoff_ms}], [true]}])
+
+    :ets.select_delete(@table, [
+      {{{:mempool_history, :"$1", :_}, :_}, [{:<, :"$1", cutoff_ms}], [true]}
+    ])
   end
 end

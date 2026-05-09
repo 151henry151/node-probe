@@ -90,16 +90,12 @@ mix phx.server
 
 ---
 
-## Dashboard Views
+## Dashboard
 
-| Route | View | Description |
-|---|---|---|
-| `/` | **Pulse** | Node heartbeat: height, peers, mempool, eBPF status |
-| `/block` | **Block** | Block arrival theater with fee histogram |
-| `/peers` | **Peers** | Live peer table, bytes in/out |
-| `/mempool` | **Mempool** | Fee histogram, tx rate, size history |
-| `/io` | **I/O** | File access heatmap, latency distribution |
-| `/anomalies` | **Anomalies** | Chronological event feed |
+| Route | Description |
+|---|---|
+| `/` | Single-page dashboard: overview (chain, mempool, eBPF, live pulse), latest block + fee histogram, mempool sparkline, peers table, kernel I/O, anomaly log |
+| `/block`, `/peers`, `/mempool`, `/io`, `/anomalies` | HTTP redirects to `/` (bookmark-compatible) |
 
 ---
 
