@@ -72,6 +72,20 @@ defmodule NodeProbe.MetricsTest do
 
       assert Metrics.tcp_state_counts()["ESTABLISHED"] >= 1
     end
+
+    test "records cpu_sample events in rolling window" do
+      Metrics.ingest_ebpf(%{
+        "type" => "cpu_sample",
+        "pid" => 12345,
+        "stack_id" => 7,
+        "ts" => 1_716_000_000_000_000_002
+      })
+
+      Metrics.ingest_ebpf(%{"type" => "cpu_sample", "pid" => 12345})
+
+      assert Metrics.cpu_samples_total_60s() == 2
+      assert_in_delta Metrics.cpu_hz_estimate(), 2 / 60, 0.0001
+    end
   end
 
   describe "latency samples" do

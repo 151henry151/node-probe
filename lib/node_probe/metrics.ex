@@ -75,6 +75,7 @@ defmodule NodeProbe.Metrics do
       "syscall" -> ingest_syscall_event(event)
       "latency" -> ingest_latency_event(event)
       "net" -> ingest_net_event(event)
+      "cpu_sample" -> ingest_cpu_sample_event(event)
       _ -> :ok
     end
   end
@@ -124,6 +125,14 @@ defmodule NodeProbe.Metrics do
     :ok
   end
 
+  defp ingest_cpu_sample_event(_event) do
+    ts = timestamp_s()
+    key = {:cpu_sample, ts}
+    :ets.update_counter(@table, key, {2, 1}, {key, 0})
+    purge_old_cpu_samples()
+    :ok
+  end
+
   defp record_vfs_bytes(op, bytes) when op in [:read, :write] do
     ts = timestamp_s()
     key = {:vfs_bytes, op, ts}
@@ -163,6 +172,22 @@ defmodule NodeProbe.Metrics do
     latency_histogram(op)
     |> Map.values()
     |> Enum.sum()
+  end
+
+  @doc "Perf CPU sample events targeting bitcoind in the latency rolling window (when not lite mode)."
+  def cpu_samples_total_60s do
+    now = timestamp_s()
+    cutoff = now - @latency_window_s
+
+    :ets.match_object(@table, {{:cpu_sample, :"$1"}, :_})
+    |> Enum.filter(fn {{_, ts}, _} -> ts >= cutoff end)
+    |> Enum.map(fn {_, n} -> n end)
+    |> Enum.sum()
+  end
+
+  @doc "Average samples per second over the rolling window."
+  def cpu_hz_estimate do
+    cpu_samples_total_60s() / @latency_window_s
   end
 
   defp push_recent_path(filename, ts) do
@@ -305,6 +330,14 @@ defmodule NodeProbe.Metrics do
 
     :ets.select_delete(@table, [
       {{{:tcp_state, :_, :"$1"}, :_}, [{:<, :"$1", cutoff}], [true]}
+    ])
+  end
+
+  defp purge_old_cpu_samples do
+    cutoff = timestamp_s() - @latency_window_s
+
+    :ets.select_delete(@table, [
+      {{{:cpu_sample, :"$1"}, :_}, [{:<, :"$1", cutoff}], [true]}
     ])
   end
 

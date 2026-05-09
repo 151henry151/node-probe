@@ -57,7 +57,9 @@ defmodule NodeProbeWeb.DashboardLiveTest do
       {:aggregated_mempool, %{"size" => 100, "bytes" => 100_000, "mempoolminfee" => 0.00001}}
     )
 
-    assert render(view) =~ "1.00 sat/vB"
+    html = render(view)
+    assert html =~ "1.00"
+    assert html =~ "sat/vB"
   end
 
   test "renders block section when block arrives", %{conn: conn} do

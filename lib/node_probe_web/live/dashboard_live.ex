@@ -23,6 +23,8 @@ defmodule NodeProbeWeb.DashboardLive do
   defp assign_defaults(socket) do
     ebpf_on = Application.get_env(:node_probe, :ebpf_enabled, true)
 
+    lite = Application.get_env(:node_probe, :lite_mode, false)
+
     assign(socket,
       page_title: "Dashboard",
       chain_height: nil,
@@ -39,6 +41,7 @@ defmodule NodeProbeWeb.DashboardLive do
       last_block_ts: nil,
       pulse_events: [],
       ebpf_enabled: ebpf_on,
+      lite_mode: lite,
       current_block: nil,
       block_history: [],
       fee_histogram: %{},
@@ -55,7 +58,9 @@ defmodule NodeProbeWeb.DashboardLive do
       vfs_write_bytes: 0,
       tcp_state_counts: %{},
       latency_read_samples: 0,
-      latency_write_samples: 0
+      latency_write_samples: 0,
+      cpu_samples_60s: 0,
+      cpu_hz_est: 0.0
     )
   end
 
@@ -160,7 +165,9 @@ defmodule NodeProbeWeb.DashboardLive do
         vfs_write_bytes: Metrics.vfs_bytes_totals(:write),
         tcp_state_counts: Metrics.tcp_state_counts(),
         latency_read_samples: Metrics.latency_sample_total(:read),
-        latency_write_samples: Metrics.latency_sample_total(:write)
+        latency_write_samples: Metrics.latency_sample_total(:write),
+        cpu_samples_60s: Metrics.cpu_samples_total_60s(),
+        cpu_hz_est: Metrics.cpu_hz_estimate()
       )
 
     Process.send_after(self(), :io_tick, @io_tick_ms)
@@ -208,10 +215,14 @@ defmodule NodeProbeWeb.DashboardLive do
   end
 
   defp io_empty?(assigns) do
-    assigns.syscall_counts == %{} and assigns.latency_hist_read == %{} and
-      assigns.latency_hist_write == %{} and assigns.recent_file_events == [] and
-      assigns.path_prefix_counts == %{} and assigns.vfs_read_bytes == 0 and
-      assigns.vfs_write_bytes == 0 and assigns.tcp_state_counts == %{}
+    kernel_empty =
+      assigns.syscall_counts == %{} and assigns.latency_hist_read == %{} and
+        assigns.latency_hist_write == %{} and assigns.recent_file_events == [] and
+        assigns.path_prefix_counts == %{} and assigns.vfs_read_bytes == 0 and
+        assigns.vfs_write_bytes == 0 and assigns.tcp_state_counts == %{}
+
+    # Summary strip (VFS, TCP chips, CPU row): hide only when there is no kernel *and* eBPF is off.
+    kernel_empty and not assigns.ebpf_enabled
   end
 
   defp format_mb(bytes) when is_integer(bytes) do
@@ -290,8 +301,14 @@ defmodule NodeProbeWeb.DashboardLive do
             </div>
           </div>
           <div class="stat-card accent-orange">
-            <div class="stat-label">Mempool</div>
-            <div class="stat-value mono">{@mempool_tx_count} tx · {@mempool_size_mb} MB</div>
+            <div class="stat-label">Mempool transactions</div>
+            <div class="stat-value mono">{@mempool_tx_count}</div>
+          </div>
+          <div class="stat-card accent-orange">
+            <div class="stat-label">Mempool size</div>
+            <div class="stat-value mono">
+              {@mempool_size_mb} <span class="muted">MB</span>
+            </div>
           </div>
           <div class="stat-card">
             <div class="stat-label">Min fee</div>
@@ -374,23 +391,9 @@ defmodule NodeProbeWeb.DashboardLive do
             </div>
           </section>
 
-          <%!-- Mempool --%>
+          <%!-- Mempool — totals live in Overview; sparkline only --%>
           <section class="dash-section" id="mempool" aria-labelledby="mempool-heading">
             <h2 id="mempool-heading" class="dash-section-title">Mempool</h2>
-            <div class="stats-grid mempool-mini-stats">
-              <div class="stat-card accent-orange">
-                <div class="stat-label">Transactions</div>
-                <div class="stat-value mono">{@mempool_tx_count}</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-label">Size</div>
-                <div class="stat-value mono">{@mempool_size_mb} MB</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-label">Min fee</div>
-                <div class="stat-value mono">{@min_fee_sat_vb_display} sat/vB</div>
-              </div>
-            </div>
             <div class="mempool-sparkline">
               <div class="sparkline-label">Size — last 10 min</div>
               <div
@@ -461,6 +464,18 @@ defmodule NodeProbeWeb.DashboardLive do
               <% end %>
             </div>
             <div :if={not @io_empty?} class="io-extras dash-io-extras">
+              <div :if={@ebpf_enabled and @lite_mode} class="io-extra-row muted">
+                <span class="section-label">CPU sampling</span>
+                <span>
+                  Off in lite mode — set <code class="mono">LITE_MODE=false</code> to attach the perf sampler (see README).
+                </span>
+              </div>
+              <div :if={@ebpf_enabled and not @lite_mode} class="io-extra-row">
+                <span class="section-label">CPU samples (bitcoind)</span>
+                <span class="mono">
+                  {@cpu_samples_60s} in last 60s · ~{Float.round(@cpu_hz_est, 1)} /s avg
+                </span>
+              </div>
               <div class="io-extra-row">
                 <span class="section-label">VFS throughput (~60s)</span>
                 <span class="mono">

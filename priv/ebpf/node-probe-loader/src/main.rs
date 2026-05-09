@@ -360,6 +360,30 @@ async fn load_and_run(pid: u32, ebpf_bytes: &[u8], lite: bool) -> Result<()> {
                     }
                 }
             }
+            {
+                let buf = {
+                    let mut rb =
+                        RingBuf::try_from(bpf.map_mut("CPU_EVENTS").context("CPU_EVENTS map")?)?;
+                    rb.next().map(|item| item.as_ref().to_vec())
+                };
+                if let Some(item) = buf {
+                    // CpuSampleEvent: pid u32 @0, stack_id i64 @8, timestamp_ns u64 @16 (24 bytes)
+                    if item.len() >= 24 {
+                        let pid_bytes: [u8; 4] = item[0..4].try_into().unwrap_or([0; 4]);
+                        let stack_bytes: [u8; 8] = item[8..16].try_into().unwrap_or([0; 8]);
+                        let ts_bytes: [u8; 8] = item[16..24].try_into().unwrap_or([0; 8]);
+                        let event_pid = u32::from_ne_bytes(pid_bytes);
+                        let stack_id = i64::from_ne_bytes(stack_bytes);
+                        let ts = u64::from_ne_bytes(ts_bytes);
+                        emit_event(&OutputEvent::CpuSample {
+                            pid: event_pid,
+                            stack_id,
+                            ts,
+                        });
+                        progressed = true;
+                    }
+                }
+            }
 
             if !progressed {
                 break;

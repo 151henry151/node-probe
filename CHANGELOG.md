@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-05-08
+
+### Added
+
+- **`Metrics`**: ingest **`cpu_sample`** loader events; expose **`cpu_samples_total_60s/0`** and **`cpu_hz_estimate/0`** over the latency rolling window.
+- **`DashboardLive`**: **Kernel I/O** summary row for CPU samples (count and average rate) when **eBPF** is enabled; muted hint when **`LITE_MODE`** is on.
+
+### Changed
+
+- **`DashboardLive`**: move mempool transaction count, size, and min fee into **Overview** as separate stat cards; leave **Mempool** as the size sparkline only.
+- **`node-probe-loader`**: drain the **`CPU_EVENTS`** ring each fair round and emit **`cpu_sample`** JSON.
+
 ## [0.1.10] - 2026-05-09
 
 ### Fixed
