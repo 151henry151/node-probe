@@ -218,6 +218,35 @@ body.np-body {
   line-height: 1.45;
 }
 
+.dash-io-extras {
+  margin-bottom: 0.85rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  font-size: 0.82rem;
+}
+
+.dash-io-extras .io-extra-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  align-items: baseline;
+  margin-bottom: 0.35rem;
+}
+
+.dash-io-extras .io-extra-row:last-child {
+  margin-bottom: 0;
+}
+
+.dash-io-extras .tcp-chip {
+  margin-right: 0.35rem;
+}
+
+.dash-io-extras .small {
+  font-size: 0.75rem;
+}
+
 .dash-recent-files {
   margin-top: 0.75rem;
   padding-top: 0.75rem;

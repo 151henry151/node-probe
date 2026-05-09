@@ -5,7 +5,7 @@ mod types;
 use types::{CpuSampleEvent, LatencyEvent, NetEvent, SyscallEvent};
 
 use aya_ebpf::{
-    helpers::{bpf_get_current_pid_tgid, bpf_ktime_get_ns},
+    helpers::{bpf_get_current_pid_tgid, bpf_ktime_get_ns, bpf_probe_read_user_str_bytes},
     macros::{kprobe, kretprobe, map, perf_event, tracepoint},
     maps::{HashMap, RingBuf},
     programs::{PerfEventContext, ProbeContext, RetProbeContext, TracePointContext},
@@ -79,7 +79,36 @@ macro_rules! syscall_probe {
     };
 }
 
-syscall_probe!(sys_enter_openat, 257);
+/// `sys_enter_openat` — copy pathname from tracepoint args (see `.../sys_enter_openat/format`, `filename` at offset 24).
+#[tracepoint]
+pub fn sys_enter_openat(ctx: TracePointContext) -> u32 {
+    if !is_target_pid() {
+        return 0;
+    }
+    let pid_tgid = bpf_get_current_pid_tgid();
+    let pid = (pid_tgid >> 32) as u32;
+    let tid = pid_tgid as u32;
+
+    if let Some(mut event) = SYSCALL_EVENTS.reserve::<SyscallEvent>(0) {
+        let e = unsafe { event.as_mut_ptr().as_mut().unwrap() };
+        e.pid = pid;
+        e.tid = tid;
+        e.syscall_nr = 257;
+        e.timestamp_ns = unsafe { bpf_ktime_get_ns() };
+        e.fd = 0;
+        e.ret = 0;
+        e.filename = [0u8; 256];
+
+        let user_ptr = unsafe { ctx.read_at::<u64>(24).unwrap_or(0) };
+        if user_ptr != 0 {
+            let src = user_ptr as *const u8;
+            let _ = unsafe { bpf_probe_read_user_str_bytes(src, &mut e.filename) };
+        }
+        event.submit(0);
+    }
+    0
+}
+
 syscall_probe!(sys_enter_read, 0);
 syscall_probe!(sys_enter_write, 1);
 syscall_probe!(sys_enter_fsync, 74);

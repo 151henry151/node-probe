@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-05-09
+
+### Fixed
+
+- **eBPF `sys_enter_openat`**: copy pathname from the tracepoint buffer (offset 24) with **`bpf_probe_read_user_str_bytes`** so **`filename`**, path-prefix counts, and recent paths populate.
+- **`node-probe-loader`**: round-robin ring-buffer draining (one syscall + one latency + one net per inner spin) so massive **`write`** syscall volume no longer starves **VFS** latency and **TCP** events; fix **net** item length check (**≥ 28** bytes for timestamp).
+- **`Metrics`**: ingest **`net`** JSON; sum **VFS** byte totals from latency events; expose TCP state counts and latency sample totals for the dashboard.
+
+### Changed
+
+- **`DashboardLive`**: **VFS throughput** (read/write MB in the latency window), **TCP state** chips (`inet_sock_set_state`), sample counts in latency column headers, styling for the new I/O summary strip.
+
 ## [0.1.9] - 2026-05-09
 
 ### Fixed

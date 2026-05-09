@@ -74,6 +74,7 @@ defmodule NodeProbe.Metrics do
     case event["type"] do
       "syscall" -> ingest_syscall_event(event)
       "latency" -> ingest_latency_event(event)
+      "net" -> ingest_net_event(event)
       _ -> :ok
     end
   end
@@ -104,8 +105,64 @@ defmodule NodeProbe.Metrics do
         _ -> :blk
       end
 
+    bytes = event["bytes"] || 0
+
+    if op in [:read, :write] and is_integer(bytes) and bytes > 0 do
+      record_vfs_bytes(op, bytes)
+    end
+
     record_latency(op, event["latency_ns"] || 0)
     :ok
+  end
+
+  defp ingest_net_event(event) do
+    state = event["state_change"] || "unknown"
+    ts = timestamp_s()
+    key = {:tcp_state, state, ts}
+    :ets.update_counter(@table, key, {2, 1}, {key, 0})
+    purge_old_tcp_states()
+    :ok
+  end
+
+  defp record_vfs_bytes(op, bytes) when op in [:read, :write] do
+    ts = timestamp_s()
+    key = {:vfs_bytes, op, ts}
+    :ets.update_counter(@table, key, {2, bytes}, {key, 0})
+    purge_old_vfs_bytes()
+  end
+
+  @doc """
+  Sum of VFS bytes (`vfs_read` / `vfs_write` return values) in the latency rolling window.
+  """
+  def vfs_bytes_totals(op) when op in [:read, :write] do
+    now = timestamp_s()
+    cutoff = now - @latency_window_s
+
+    :ets.match_object(@table, {{:vfs_bytes, op, :"$1"}, :_})
+    |> Enum.filter(fn {{_, _, ts}, _} -> ts >= cutoff end)
+    |> Enum.map(fn {_, n} -> n end)
+    |> Enum.sum()
+  end
+
+  @doc """
+  TCP `inet_sock_set_state` transitions per new state label in the rolling window.
+  """
+  def tcp_state_counts do
+    now = timestamp_s()
+    cutoff = now - @latency_window_s
+
+    :ets.match_object(@table, {{:tcp_state, :_, :"$1"}, :_})
+    |> Enum.filter(fn {{_, _, ts}, _} -> ts >= cutoff end)
+    |> Enum.reduce(%{}, fn {{_, state, _}, count}, acc ->
+      Map.update(acc, state, count, &(&1 + count))
+    end)
+  end
+
+  @doc "Total latency histogram samples in the window (read or write)."
+  def latency_sample_total(op) when op in [:read, :write] do
+    latency_histogram(op)
+    |> Map.values()
+    |> Enum.sum()
   end
 
   defp push_recent_path(filename, ts) do
@@ -233,6 +290,22 @@ defmodule NodeProbe.Metrics do
   defp purge_old_latency do
     cutoff = timestamp_s() - @latency_window_s
     :ets.select_delete(@table, [{{{:latency, :_, :_, :"$1"}, :_}, [{:<, :"$1", cutoff}], [true]}])
+  end
+
+  defp purge_old_vfs_bytes do
+    cutoff = timestamp_s() - @latency_window_s
+
+    :ets.select_delete(@table, [
+      {{{:vfs_bytes, :_, :"$1"}, :_}, [{:<, :"$1", cutoff}], [true]}
+    ])
+  end
+
+  defp purge_old_tcp_states do
+    cutoff = timestamp_s() - @latency_window_s
+
+    :ets.select_delete(@table, [
+      {{{:tcp_state, :_, :"$1"}, :_}, [{:<, :"$1", cutoff}], [true]}
+    ])
   end
 
   defp purge_old_mempool do

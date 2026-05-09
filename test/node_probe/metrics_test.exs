@@ -50,6 +50,28 @@ defmodule NodeProbe.MetricsTest do
       hist = Metrics.latency_histogram(:read)
       assert hist["1-10µs"] == 1
     end
+
+    test "records vfs bytes from latency events" do
+      Metrics.ingest_ebpf(%{
+        "type" => "latency",
+        "op" => "write",
+        "latency_ns" => 1000,
+        "bytes" => 4096
+      })
+
+      assert Metrics.vfs_bytes_totals(:write) >= 4096
+    end
+
+    test "records tcp state transitions from net events" do
+      Metrics.ingest_ebpf(%{
+        "type" => "net",
+        "state_change" => "ESTABLISHED",
+        "daddr" => "1.2.3.4",
+        "dport" => 8333
+      })
+
+      assert Metrics.tcp_state_counts()["ESTABLISHED"] >= 1
+    end
   end
 
   describe "latency samples" do

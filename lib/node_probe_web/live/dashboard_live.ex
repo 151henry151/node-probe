@@ -50,7 +50,12 @@ defmodule NodeProbeWeb.DashboardLive do
       latency_hist_write: %{},
       recent_file_events: [],
       syscall_counts: %{},
-      path_prefix_counts: %{}
+      path_prefix_counts: %{},
+      vfs_read_bytes: 0,
+      vfs_write_bytes: 0,
+      tcp_state_counts: %{},
+      latency_read_samples: 0,
+      latency_write_samples: 0
     )
   end
 
@@ -150,7 +155,12 @@ defmodule NodeProbeWeb.DashboardLive do
         path_prefix_counts: Metrics.path_prefix_counts(),
         latency_hist_read: Metrics.latency_histogram(:read),
         latency_hist_write: Metrics.latency_histogram(:write),
-        recent_file_events: Metrics.recent_paths()
+        recent_file_events: Metrics.recent_paths(),
+        vfs_read_bytes: Metrics.vfs_bytes_totals(:read),
+        vfs_write_bytes: Metrics.vfs_bytes_totals(:write),
+        tcp_state_counts: Metrics.tcp_state_counts(),
+        latency_read_samples: Metrics.latency_sample_total(:read),
+        latency_write_samples: Metrics.latency_sample_total(:write)
       )
 
     Process.send_after(self(), :io_tick, @io_tick_ms)
@@ -199,7 +209,13 @@ defmodule NodeProbeWeb.DashboardLive do
 
   defp io_empty?(assigns) do
     assigns.syscall_counts == %{} and assigns.latency_hist_read == %{} and
-      assigns.latency_hist_write == %{} and assigns.recent_file_events == []
+      assigns.latency_hist_write == %{} and assigns.recent_file_events == [] and
+      assigns.path_prefix_counts == %{} and assigns.vfs_read_bytes == 0 and
+      assigns.vfs_write_bytes == 0 and assigns.tcp_state_counts == %{}
+  end
+
+  defp format_mb(bytes) when is_integer(bytes) do
+    Float.round(bytes / 1_000_000, 2)
   end
 
   defp sorted_peers(peers, sort_by, sort_dir) do
@@ -439,10 +455,29 @@ defmodule NodeProbeWeb.DashboardLive do
             </h2>
             <div :if={@io_empty?} class="muted io-empty-hint dash-io-hint">
               <%= if @ebpf_enabled do %>
-                No samples yet — with the loader attached to <span class="mono">bitcoind</span>, expect <span class="mono">read</span> / <span class="mono">write</span> syscall counts during sync plus read/write latency from VFS probes. If this never moves, reload the loader (see README).
+                No samples yet — with the loader attached to <span class="mono">bitcoind</span>, expect syscall counts during sync; paths come from <span class="mono">openat</span>; read/write latency from VFS kprobes; TCP rows from <span class="mono">inet_sock_set_state</span>. If this never moves, reload the loader (see README).
               <% else %>
                 eBPF disabled (<code class="mono">EBPF_ENABLED=false</code>).
               <% end %>
+            </div>
+            <div :if={not @io_empty?} class="io-extras dash-io-extras">
+              <div class="io-extra-row">
+                <span class="section-label">VFS throughput (~60s)</span>
+                <span class="mono">
+                  read {format_mb(@vfs_read_bytes)} MB · write {format_mb(@vfs_write_bytes)} MB
+                </span>
+              </div>
+              <div :if={map_size(@tcp_state_counts) > 0} class="io-extra-row">
+                <span class="section-label">TCP state (bitcoind)</span>
+                <span class="mono tcp-state-line">
+                  <%= for {state, n} <- Enum.sort_by(@tcp_state_counts, fn {_, c} -> -c end) |> Enum.take(8) do %>
+                    <span class="tcp-chip">{state} ({n})</span>
+                  <% end %>
+                </span>
+              </div>
+              <div class="io-extra-row muted small">
+                Latency samples — read: {@latency_read_samples} · write: {@latency_write_samples}
+              </div>
             </div>
             <div class="io-grid dash-io-grid">
               <div class="io-section">
@@ -474,7 +509,7 @@ defmodule NodeProbeWeb.DashboardLive do
                 <div :if={@path_prefix_counts == %{}} class="muted">No paths captured</div>
               </div>
               <div class="io-section">
-                <div class="section-label">Read latency</div>
+                <div class="section-label">Read latency ({@latency_read_samples})</div>
                 <div :for={{bucket, count} <- @latency_hist_read} class="io-row">
                   <span class="mono">{bucket}</span>
                   <span class="mono">{count}</span>
@@ -482,7 +517,7 @@ defmodule NodeProbeWeb.DashboardLive do
                 <div :if={@latency_hist_read == %{}} class="muted">No read samples yet</div>
               </div>
               <div class="io-section">
-                <div class="section-label">Write latency</div>
+                <div class="section-label">Write latency ({@latency_write_samples})</div>
                 <div :for={{bucket, count} <- @latency_hist_write} class="io-row">
                   <span class="mono">{bucket}</span>
                   <span class="mono">{count}</span>

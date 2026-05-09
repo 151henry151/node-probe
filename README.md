@@ -191,6 +191,8 @@ sudo systemctl restart node-probe
 
 If **Kernel I/O** never moves after deploy, check **`journalctl -u node-probe`** for loader **`Permission denied`** on paths under **`/sys/kernel/tracing/events/`**.
 
+**What the UI uses:** **Path prefix** / **recent paths** read the userspace string from the **`sys_enter_openat`** tracepoint (other traced syscalls do not embed a path in the ring buffer). **Read/write latency** and **VFS MB** totals come from **kprobes** on **`vfs_read`** / **`vfs_write`** (kernel VFS), which is not a 1:1 match with **`read`/`write`** syscall counts. **TCP** state chips use **`inet_sock_set_state`**. The loader **round-robins** the syscall, latency, and net ring buffers so one hot source (e.g. millions of **`write`** syscalls) does not starve the others.
+
 ### Mix Release
 
 ```bash

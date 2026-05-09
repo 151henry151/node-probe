@@ -266,81 +266,103 @@ async fn load_and_run(pid: u32, ebpf_bytes: &[u8], lite: bool) -> Result<()> {
 
     let _signal = signal::ctrl_c();
 
-    // Simplified ring buffer polling — in production this would use async polling
+    // Fair round-robin: pop at most one event per ring per inner iteration so high syscall
+    // volume cannot starve LATENCY_EVENTS / NET_EVENTS (previously we drained the entire
+    // syscall ring before touching latency).
     loop {
-        {
-            let mut rb = RingBuf::try_from(
-                bpf.map_mut("SYSCALL_EVENTS")
-                    .context("SYSCALL_EVENTS map")?,
-            )?;
-            while let Some(item) = rb.next() {
-                if item.len() >= 16 {
-                    let pid_bytes: [u8; 4] = item[0..4].try_into().unwrap_or([0; 4]);
-                    let nr_bytes: [u8; 4] = item[8..12].try_into().unwrap_or([0; 4]);
-                    let ts_bytes: [u8; 8] = item[16..24].try_into().unwrap_or([0; 8]);
-                    let syscall_pid = u32::from_ne_bytes(pid_bytes);
-                    let syscall_nr = u32::from_ne_bytes(nr_bytes);
-                    let ts = u64::from_ne_bytes(ts_bytes);
-                    let filename = parse_syscall_filename(item.as_ref());
-                    emit_event(&OutputEvent::Syscall {
-                        pid: syscall_pid,
-                        syscall: syscall_name(syscall_nr).to_string(),
-                        ts,
-                        filename,
-                    });
+        loop {
+            let mut progressed = false;
+
+            {
+                let buf = {
+                    let mut rb = RingBuf::try_from(
+                        bpf.map_mut("SYSCALL_EVENTS")
+                            .context("SYSCALL_EVENTS map")?,
+                    )?;
+                    rb.next().map(|item| item.as_ref().to_vec())
+                };
+                if let Some(item) = buf {
+                    if item.len() >= 16 {
+                        let pid_bytes: [u8; 4] = item[0..4].try_into().unwrap_or([0; 4]);
+                        let nr_bytes: [u8; 4] = item[8..12].try_into().unwrap_or([0; 4]);
+                        let ts_bytes: [u8; 8] = item[16..24].try_into().unwrap_or([0; 8]);
+                        let syscall_pid = u32::from_ne_bytes(pid_bytes);
+                        let syscall_nr = u32::from_ne_bytes(nr_bytes);
+                        let ts = u64::from_ne_bytes(ts_bytes);
+                        let filename = parse_syscall_filename(item.as_ref());
+                        emit_event(&OutputEvent::Syscall {
+                            pid: syscall_pid,
+                            syscall: syscall_name(syscall_nr).to_string(),
+                            ts,
+                            filename,
+                        });
+                        progressed = true;
+                    }
                 }
             }
-        }
-        {
-            let mut rb = RingBuf::try_from(
-                bpf.map_mut("LATENCY_EVENTS")
-                    .context("LATENCY_EVENTS map")?,
-            )?;
-            while let Some(item) = rb.next() {
-                if item.len() >= 24 {
-                    let pid_bytes: [u8; 4] = item[0..4].try_into().unwrap_or([0; 4]);
-                    let latency_bytes: [u8; 8] = item[8..16].try_into().unwrap_or([0; 8]);
-                    let bytes_bytes: [u8; 8] = item[16..24].try_into().unwrap_or([0; 8]);
-                    let op_byte = item[4];
-                    let event_pid = u32::from_ne_bytes(pid_bytes);
-                    let latency_ns = u64::from_ne_bytes(latency_bytes);
-                    let bytes = u64::from_ne_bytes(bytes_bytes);
-                    let op = match op_byte {
-                        0 => "read",
-                        1 => "write",
-                        _ => "blk",
-                    };
-                    emit_event(&OutputEvent::Latency {
-                        pid: event_pid,
-                        op: op.to_string(),
-                        latency_ns,
-                        bytes,
-                    });
+            {
+                let buf = {
+                    let mut rb = RingBuf::try_from(
+                        bpf.map_mut("LATENCY_EVENTS")
+                            .context("LATENCY_EVENTS map")?,
+                    )?;
+                    rb.next().map(|item| item.as_ref().to_vec())
+                };
+                if let Some(item) = buf {
+                    if item.len() >= 24 {
+                        let pid_bytes: [u8; 4] = item[0..4].try_into().unwrap_or([0; 4]);
+                        let latency_bytes: [u8; 8] = item[8..16].try_into().unwrap_or([0; 8]);
+                        let bytes_bytes: [u8; 8] = item[16..24].try_into().unwrap_or([0; 8]);
+                        let op_byte = item[4];
+                        let event_pid = u32::from_ne_bytes(pid_bytes);
+                        let latency_ns = u64::from_ne_bytes(latency_bytes);
+                        let bytes = u64::from_ne_bytes(bytes_bytes);
+                        let op = match op_byte {
+                            0 => "read",
+                            1 => "write",
+                            _ => "blk",
+                        };
+                        emit_event(&OutputEvent::Latency {
+                            pid: event_pid,
+                            op: op.to_string(),
+                            latency_ns,
+                            bytes,
+                        });
+                        progressed = true;
+                    }
                 }
             }
-        }
-        {
-            let mut rb =
-                RingBuf::try_from(bpf.map_mut("NET_EVENTS").context("NET_EVENTS map")?)?;
-            while let Some(item) = rb.next() {
-                if item.len() >= 20 {
-                    let pid_bytes: [u8; 4] = item[0..4].try_into().unwrap_or([0; 4]);
-                    let daddr_bytes: [u8; 4] = item[8..12].try_into().unwrap_or([0; 4]);
-                    let dport_bytes: [u8; 2] = item[14..16].try_into().unwrap_or([0; 2]);
-                    let new_state = item[17];
-                    let ts_bytes: [u8; 8] = item[20..28].try_into().unwrap_or([0; 8]);
-                    let event_pid = u32::from_ne_bytes(pid_bytes);
-                    let daddr = u32::from_ne_bytes(daddr_bytes);
-                    let dport = u16::from_ne_bytes(dport_bytes);
-                    let ts = u64::from_ne_bytes(ts_bytes);
-                    emit_event(&OutputEvent::Net {
-                        pid: event_pid,
-                        daddr: format_ipv4(daddr),
-                        dport,
-                        state_change: tcp_state_name(new_state).to_string(),
-                        ts,
-                    });
+            {
+                let buf = {
+                    let mut rb =
+                        RingBuf::try_from(bpf.map_mut("NET_EVENTS").context("NET_EVENTS map")?)?;
+                    rb.next().map(|item| item.as_ref().to_vec())
+                };
+                if let Some(item) = buf {
+                    if item.len() >= 28 {
+                        let pid_bytes: [u8; 4] = item[0..4].try_into().unwrap_or([0; 4]);
+                        let daddr_bytes: [u8; 4] = item[8..12].try_into().unwrap_or([0; 4]);
+                        let dport_bytes: [u8; 2] = item[14..16].try_into().unwrap_or([0; 2]);
+                        let new_state = item[17];
+                        let ts_bytes: [u8; 8] = item[20..28].try_into().unwrap_or([0; 8]);
+                        let event_pid = u32::from_ne_bytes(pid_bytes);
+                        let daddr = u32::from_ne_bytes(daddr_bytes);
+                        let dport = u16::from_ne_bytes(dport_bytes);
+                        let ts = u64::from_ne_bytes(ts_bytes);
+                        emit_event(&OutputEvent::Net {
+                            pid: event_pid,
+                            daddr: format_ipv4(daddr),
+                            dport,
+                            state_change: tcp_state_name(new_state).to_string(),
+                            ts,
+                        });
+                        progressed = true;
+                    }
                 }
+            }
+
+            if !progressed {
+                break;
             }
         }
 
