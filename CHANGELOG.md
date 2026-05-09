@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-09
+
+### Changed
+
+- Start **`RpcCollector`** and **`EbpfCollector`** under **`NodeProbe.Application`** so RPC and eBPF pipelines run in production.
+- Extend **`config/runtime.exs`** production settings with **`PHX_PATH`** (nginx path prefix), loopback **`http`** bind, and **`check_origin`** for **`hromp.com`** / **`www.hromp.com`** when **`PHX_BIND`** is unset.
+
+### Added
+
+- Ignore **`.env.production`** in **`.gitignore`**.
+
 ## [0.1.0] - 2026-05-08
 
 ### Added

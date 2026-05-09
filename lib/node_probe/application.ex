@@ -13,6 +13,8 @@ defmodule NodeProbe.Application do
       {Phoenix.PubSub, name: NodeProbe.PubSub},
       {Finch, name: NodeProbe.Finch},
       NodeProbe.Metrics,
+      NodeProbe.Collectors.RpcCollector,
+      NodeProbe.Collectors.EbpfCollector,
       NodeProbe.Aggregator,
       NodeProbeWeb.Endpoint
     ]

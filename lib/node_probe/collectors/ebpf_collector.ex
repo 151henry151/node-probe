@@ -12,7 +12,7 @@ defmodule NodeProbe.Collectors.EbpfCollector do
   end
 
   @impl true
-  def init(opts) do
+  def init(_opts) do
     enabled = Application.get_env(:node_probe, :ebpf_enabled, true)
     loader_path = Application.get_env(:node_probe, :ebpf_loader_path, "")
     lite_mode = Application.get_env(:node_probe, :lite_mode, false)
