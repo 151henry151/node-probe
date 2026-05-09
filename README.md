@@ -169,6 +169,26 @@ Or set `AmbientCapabilities=CAP_BPF CAP_PERFMON` in the systemd unit (see below)
 
 When the loader is spawned as an Erlang **Port**, its **stdout is a pipe**. The loader **`flush`es** stdout after each NDJSON line so the Phoenix **`EbpfCollector`** receives events in real time — without that, lines can sit in a libc block buffer and the dashboard stays empty even while probes fire.
 
+### Tracefs permissions (syscall / sock tracepoints)
+
+Attaching tracepoints reads metadata under **`/sys/kernel/tracing/events/`** (for example **`…/syscalls/sys_enter_openat/id`**). On many kernels those directories and files are **`0750` / `0640`** (`root:root`), so a non-root loader fails with **Permission denied** before any BPF maps fill — the dashboard **Kernel I/O** section stays empty.
+
+Relax only what node-probe needs at boot:
+
+- Repo unit: **`scripts/tracefs-perms.service`** — enables **`755`** on **`tracing`** and **`events`**, then **`chmod -R a+rX`** on **`events/syscalls`** and **`events/sock`** (for **`inet_sock_set_state`**).
+
+Install and enable on the host:
+
+```bash
+sudo cp /path/to/webserver/scripts/tracefs-perms.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable tracefs-perms.service
+sudo systemctl restart tracefs-perms.service   # apply now without reboot
+sudo systemctl restart node-probe
+```
+
+If **Kernel I/O** never moves after deploy, check **`journalctl -u node-probe`** for loader **`Permission denied`** on paths under **`/sys/kernel/tracing/events/`**.
+
 ### Mix Release
 
 ```bash

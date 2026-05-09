@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-05-09
+
+### Changed
+
+- **`README.md`**: document tracefs **`events/`** visibility (**`syscalls`**, **`sock`**) for non-root loaders and reference **`scripts/tracefs-perms.service`** installation steps.
+
 ## [0.1.7] - 2026-05-09
 
 ### Changed
