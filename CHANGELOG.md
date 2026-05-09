@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-09
+
+### Fixed
+
+- Resolve LiveView WebSocket path from the digested **`script[phx-track-static]`** URL so **`/node-probe/live`** works behind nginx (avoid connecting to **`/live`** at site root).
+- Use **`~p`** path helpers for sidebar navigation links when **`PHX_PATH`** is set.
+
 ## [0.1.1] - 2026-05-09
 
 ### Changed

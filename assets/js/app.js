@@ -26,7 +26,15 @@ import {hooks as colocatedHooks} from "phoenix-colocated/node_probe"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
-const liveSocket = new LiveSocket("/live", Socket, {
+// Resolve "/live" relative to this app's URL prefix (e.g. /node-probe/live behind nginx).
+// Digested script URL is .../PREFIX/assets/js/app-*.js so stripping "/assets/js/<file>" yields PREFIX.
+const scriptSrc = document.querySelector("script[phx-track-static][src]")?.getAttribute("src") || ""
+let prefix = ""
+try {
+  prefix = new URL(scriptSrc, window.location.href).pathname.replace(/\/assets\/js\/[^/]+$/, "")
+} catch (_e) {}
+const liveSocketPath = `${prefix}/live`
+const liveSocket = new LiveSocket(liveSocketPath, Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
   hooks: {...colocatedHooks},
