@@ -37,7 +37,7 @@ defmodule NodeProbe.Collectors.EbpfCollector do
   def handle_info({port, {:data, {:eol, line}}}, %{port: port} = state) do
     case Jason.decode(line) do
       {:ok, event} ->
-        Phoenix.PubSub.broadcast(NodeProbe.PubSub, "ebpf:events", {:ebpf_event, event})
+        NodeProbe.Metrics.ingest_ebpf(event)
 
       {:error, reason} ->
         Logger.debug("EbpfCollector: JSON decode failed: #{inspect(reason)}, line: #{line}")

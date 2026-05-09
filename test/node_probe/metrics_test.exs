@@ -31,6 +31,27 @@ defmodule NodeProbe.MetricsTest do
     end
   end
 
+  describe "ingest_ebpf/1" do
+    test "records syscall, path prefix, and recent path for filesystem samples" do
+      Metrics.ingest_ebpf(%{
+        "type" => "syscall",
+        "syscall" => "openat",
+        "filename" => "/var/lib/bitcoin/.bitcoin/blocks/foo.dat",
+        "ts" => 99
+      })
+
+      assert Metrics.syscall_counts()["openat"] == 1
+      assert Metrics.path_prefix_counts()["blocks/"] == 1
+      assert [%{filename: _, ts: 99}] = Metrics.recent_paths()
+    end
+
+    test "records latency histogram buckets" do
+      Metrics.ingest_ebpf(%{"type" => "latency", "op" => "read", "latency_ns" => 5_000})
+      hist = Metrics.latency_histogram(:read)
+      assert hist["1-10µs"] == 1
+    end
+  end
+
   describe "latency samples" do
     test "records latency and buckets it correctly" do
       Metrics.record_latency(:read, 500)

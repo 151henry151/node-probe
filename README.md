@@ -29,13 +29,15 @@ Your node, from two simultaneous angles: **what the kernel sees** (raw behaviora
               │   EbpfCollector           │           │
               │   (GenServer + Port)      │           │
               └────────────────┬──────────┘           │
-                               │                      │
-                        PubSub │ "ebpf:events"        │ PubSub "rpc:events"
-                               │                      │
-                        ┌──────▼──────────────────────▼───────┐
-                        │            Aggregator               │
-                        │   correlates kernel ↔ bitcoin       │
-                        │   maintains ETS rolling metrics     │
+                               │ decode JSON          │
+                               └──────────► Metrics.ingest_ebpf / ETS (syscall/latency paths)
+                                                        │
+                                              PubSub "rpc:events"
+                                                        │
+                        ┌───────────────────────────────▼────────┐
+                        │            Aggregator                 │
+                        │   forwards RPC → dashboard PubSub     │
+                        │   mempool history / block arrivals    │
                         └──────────────────┬──────────────────┘
                                            │ PubSub "node_probe:events"
               ┌────────────────────────────┼────────────────────────────┐

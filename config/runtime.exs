@@ -7,7 +7,13 @@ config :node_probe,
   bitcoin_cookie_path: System.get_env("BITCOIN_COOKIE_PATH", "~/.bitcoin/.cookie"),
   ebpf_loader_path:
     System.get_env("EBPF_LOADER_PATH", "./priv/ebpf/target/release/node-probe-loader"),
-  ebpf_enabled: System.get_env("EBPF_ENABLED", "true") == "true",
+  ebpf_enabled:
+    (
+      case config_env() do
+        :test -> false
+        _ -> System.get_env("EBPF_ENABLED", "true") == "true"
+      end
+    ),
   p2p_tap_enabled: System.get_env("P2P_TAP_ENABLED", "false") == "true",
   rpc_poll_interval_ms: String.to_integer(System.get_env("RPC_POLL_MS", "2000")),
   lite_mode: System.get_env("LITE_MODE", "false") == "true"

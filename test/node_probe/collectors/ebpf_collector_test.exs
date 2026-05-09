@@ -16,6 +16,9 @@ defmodule NodeProbe.Collectors.EbpfCollectorTest do
   end
 
   defp start_collector(opts \\ []) do
+    name = :"ebpf_collector_test_#{System.unique_integer([:positive])}"
+    opts = Keyword.put_new(opts, :name, name)
+
     {:ok, pid} = start_supervised({EbpfCollector, opts}, id: make_ref())
     pid
   end
@@ -45,8 +48,8 @@ defmodule NodeProbe.Collectors.EbpfCollectorTest do
   end
 
   describe "JSON line processing" do
-    test "decodes valid JSON lines and broadcasts to PubSub" do
-      Phoenix.PubSub.subscribe(NodeProbe.PubSub, "ebpf:events")
+    test "decodes valid syscall JSON lines into Metrics" do
+      :ets.delete_all_objects(:node_probe_metrics)
 
       Application.put_env(:node_probe, :ebpf_enabled, false)
       pid = start_collector()
@@ -55,7 +58,8 @@ defmodule NodeProbe.Collectors.EbpfCollectorTest do
       json = ~s({"type":"syscall","pid":12345,"syscall":"openat","ts":1716000000000000000})
       send(pid, {nil, {:data, {:eol, json}}})
 
-      assert_receive {:ebpf_event, %{"type" => "syscall", "pid" => 12345}}, 1_000
+      Process.sleep(50)
+      assert NodeProbe.Metrics.syscall_counts()["openat"] >= 1
     end
 
     test "handles malformed JSON without crashing" do

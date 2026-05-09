@@ -17,7 +17,6 @@ defmodule NodeProbe.Aggregator do
 
   @impl true
   def init(_opts) do
-    Phoenix.PubSub.subscribe(NodeProbe.PubSub, "ebpf:events")
     Phoenix.PubSub.subscribe(NodeProbe.PubSub, "rpc:events")
 
     state = %__MODULE__{
@@ -30,41 +29,10 @@ defmodule NodeProbe.Aggregator do
   end
 
   # ---------------------------------------------------------------------------
-  # Handle eBPF events
-  # ---------------------------------------------------------------------------
-
-  @impl true
-  def handle_info({:ebpf_event, %{"type" => "syscall"} = event}, state) do
-    syscall = event["syscall"] || "unknown"
-    Metrics.increment_syscall(syscall)
-    {:noreply, state}
-  end
-
-  def handle_info({:ebpf_event, %{"type" => "latency"} = event}, state) do
-    op =
-      case event["op"] do
-        "read" -> :read
-        "write" -> :write
-        _ -> :blk
-      end
-
-    latency_ns = event["latency_ns"] || 0
-    Metrics.record_latency(op, latency_ns)
-    {:noreply, state}
-  end
-
-  def handle_info({:ebpf_event, %{"type" => "net"}}, state) do
-    {:noreply, state}
-  end
-
-  def handle_info({:ebpf_event, _event}, state) do
-    {:noreply, state}
-  end
-
-  # ---------------------------------------------------------------------------
   # Handle RPC events
   # ---------------------------------------------------------------------------
 
+  @impl true
   def handle_info({:block, block}, state) do
     height = block["height"]
     hash = block["hash"]
@@ -88,18 +56,6 @@ defmodule NodeProbe.Aggregator do
   end
 
   def handle_info({:peers, peers}, state) do
-    Enum.each(peers, fn peer ->
-      id = peer["id"]
-
-      if id do
-        sent = peer["bytessent"] || 0
-        recv = peer["bytesrecv"] || 0
-        Metrics.record_peer_bytes(id, :sent, 0)
-        Metrics.record_peer_bytes(id, :recv, 0)
-        _ = {sent, recv}
-      end
-    end)
-
     publish({:aggregated_peers, peers})
     {:noreply, state}
   end

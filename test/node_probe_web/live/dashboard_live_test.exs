@@ -99,7 +99,8 @@ defmodule NodeProbeWeb.DashboardLiveTest do
   test "io section counts syscall events", %{conn: conn} do
     {:ok, view, _} = live(conn, ~p"/")
 
-    send(view.pid, {:ebpf_event, %{"type" => "syscall", "syscall" => "read", "ts" => 1}})
+    NodeProbe.Metrics.ingest_ebpf(%{"type" => "syscall", "syscall" => "read", "ts" => 1})
+    send(view.pid, :io_tick)
 
     rendered = render(view)
     assert rendered =~ "read"
@@ -108,11 +109,14 @@ defmodule NodeProbeWeb.DashboardLiveTest do
   test "io section aggregates write latency buckets", %{conn: conn} do
     {:ok, view, _} = live(conn, ~p"/")
 
-    send(
-      view.pid,
-      {:ebpf_event, %{"type" => "latency", "op" => "write", "latency_ns" => 50_000, "bytes" => 4096}}
-    )
+    NodeProbe.Metrics.ingest_ebpf(%{
+      "type" => "latency",
+      "op" => "write",
+      "latency_ns" => 50_000,
+      "bytes" => 4096
+    })
 
+    send(view.pid, :io_tick)
     assert render(view) =~ "10-100µs"
   end
 

@@ -8,11 +8,13 @@ defmodule NodeProbeWeb.DashboardLive do
   alias NodeProbe.Metrics
   alias NodeProbeWeb.FeeFormat
 
+  @io_tick_ms 250
+
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(NodeProbe.PubSub, "node_probe:events")
-      Phoenix.PubSub.subscribe(NodeProbe.PubSub, "ebpf:events")
+      send(self(), :io_tick)
     end
 
     {:ok, assign_defaults(socket)}
@@ -141,56 +143,17 @@ defmodule NodeProbeWeb.DashboardLive do
     {:noreply, assign(socket, pulse_events: pulse)}
   end
 
-  def handle_info({:ebpf_event, %{"type" => "syscall"} = event}, socket) do
-    syscall = event["syscall"] || "unknown"
-    counts = Map.update(socket.assigns.syscall_counts, syscall, 1, &(&1 + 1))
-    filename = event["filename"] || ""
-
-    prefix_counts =
-      if filename != "" do
-        Map.update(socket.assigns.path_prefix_counts, file_prefix(filename), 1, &(&1 + 1))
-      else
-        socket.assigns.path_prefix_counts
-      end
-
-    recent =
-      if filename != "" do
-        [%{filename: filename, ts: event["ts"]} | socket.assigns.recent_file_events]
-        |> Enum.take(50)
-      else
-        socket.assigns.recent_file_events
-      end
-
-    {:noreply,
-     assign(socket,
-       syscall_counts: counts,
-       path_prefix_counts: prefix_counts,
-       recent_file_events: recent
-     )}
-  end
-
-  def handle_info({:ebpf_event, %{"type" => "latency"} = event}, socket) do
-    hist =
-      case event["op"] do
-        "read" ->
-          bucket = latency_bucket(event["latency_ns"] || 0)
-          Map.update(socket.assigns.latency_hist_read, bucket, 1, &(&1 + 1))
-
-        "write" ->
-          bucket = latency_bucket(event["latency_ns"] || 0)
-          Map.update(socket.assigns.latency_hist_write, bucket, 1, &(&1 + 1))
-
-        _ ->
-          nil
-      end
-
+  def handle_info(:io_tick, socket) do
     socket =
-      case event["op"] do
-        "read" -> assign(socket, latency_hist_read: hist)
-        "write" -> assign(socket, latency_hist_write: hist)
-        _ -> socket
-      end
+      assign(socket,
+        syscall_counts: Metrics.syscall_counts(),
+        path_prefix_counts: Metrics.path_prefix_counts(),
+        latency_hist_read: Metrics.latency_histogram(:read),
+        latency_hist_write: Metrics.latency_histogram(:write),
+        recent_file_events: Metrics.recent_paths()
+      )
 
+    Process.send_after(self(), :io_tick, @io_tick_ms)
     {:noreply, socket}
   end
 
@@ -231,29 +194,6 @@ defmodule NodeProbeWeb.DashboardLive do
       rate < 100 -> "50-100"
       rate < 300 -> "100-300"
       true -> "300+"
-    end
-  end
-
-  defp file_prefix(filename) do
-    cond do
-      String.contains?(filename, "/blocks/") -> "blocks/"
-      String.contains?(filename, "/chainstate/") -> "chainstate/"
-      String.contains?(filename, "/wallets/") -> "wallets/"
-      String.contains?(filename, "/indexes/") -> "indexes/"
-      filename == "" -> "unknown"
-      true -> "other"
-    end
-  end
-
-  defp latency_bucket(ns) do
-    cond do
-      ns < 1_000 -> "<1µs"
-      ns < 10_000 -> "1-10µs"
-      ns < 100_000 -> "10-100µs"
-      ns < 1_000_000 -> "100µs-1ms"
-      ns < 10_000_000 -> "1-10ms"
-      ns < 100_000_000 -> "10-100ms"
-      true -> ">100ms"
     end
   end
 

@@ -65,15 +65,21 @@ defmodule NodeProbe.Bitcoin.Rpc do
 
   @doc false
   def resolve_auth do
-    cookie_path = config(:bitcoin_cookie_path) |> Path.expand()
+    raw =
+      case config(:bitcoin_cookie_path) do
+        path when is_binary(path) and path != "" -> path
+        _ -> "~/.bitcoin/.cookie"
+      end
+
+    cookie_path = Path.expand(String.trim(raw))
 
     case File.read(cookie_path) do
       {:ok, cookie} ->
         String.trim(cookie)
 
       {:error, _} ->
-        user = config(:bitcoin_rpc_user)
-        pass = config(:bitcoin_rpc_pass)
+        user = config(:bitcoin_rpc_user) || ""
+        pass = config(:bitcoin_rpc_pass) || ""
         "#{user}:#{pass}"
     end
   end

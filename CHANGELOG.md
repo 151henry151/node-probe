@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-05-09
+
+### Fixed
+
+- **`Bitcoin.Rpc.resolve_auth`**: treat empty / missing **`BITCOIN_COOKIE_PATH`** like “no cookie file” so **`Path.expand`** is never called on **`nil`** or **`""`** (avoids **`RpcCollector`** crashes under odd shell env).
+- **`DashboardLive`**: avoid subscribing to high-frequency **`ebpf`** PubSub messages — **`Metrics.ingest_ebpf`** runs in **`EbpfCollector`** and the dashboard polls **`Metrics`** on a timer so **`Aggregator` / LiveView** mailboxes are not starved when syscall throughput spikes (RPC overview stayed blank while I/O still moved).
+
+### Changed
+
+- **`EbpfCollector`**: ingest decoded loader JSON into **`Metrics`** instead of broadcasting **`ebpf:events`**.
+- **`Aggregator`**: subscribe only to **`rpc:events`**; drop incorrect additive **`record_peer_bytes`** calls on polled **`getpeerinfo`** totals.
+- **`config/runtime.exs`**: force **`ebpf_enabled: false`** in **`Mix`** **`:test`** env so **`mix test`** does not attach the real loader.
+- **`README.md`**: refresh architecture diagram for Metrics ingest vs RPC PubSub.
+
 ## [0.1.8] - 2026-05-09
 
 ### Changed

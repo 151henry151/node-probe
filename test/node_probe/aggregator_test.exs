@@ -14,36 +14,8 @@ defmodule NodeProbe.AggregatorTest do
     {:ok, aggregator: pid}
   end
 
-  test "subscribes to ebpf:events and rpc:events on init", %{aggregator: pid} do
+  test "starts and stays alive", %{aggregator: pid} do
     assert Process.alive?(pid)
-  end
-
-  test "increments syscall metric on ebpf syscall event" do
-    before_count = Metrics.syscall_counts()["openat"] || 0
-
-    Phoenix.PubSub.broadcast(
-      NodeProbe.PubSub,
-      "ebpf:events",
-      {:ebpf_event, %{"type" => "syscall", "syscall" => "openat"}}
-    )
-
-    Process.sleep(100)
-
-    after_count = Metrics.syscall_counts()["openat"] || 0
-    assert after_count >= before_count + 1
-  end
-
-  test "records latency metric on ebpf latency event" do
-    Phoenix.PubSub.broadcast(
-      NodeProbe.PubSub,
-      "ebpf:events",
-      {:ebpf_event, %{"type" => "latency", "op" => "read", "latency_ns" => 10_000}}
-    )
-
-    Process.sleep(50)
-
-    hist = Metrics.latency_histogram(:read)
-    assert map_size(hist) > 0
   end
 
   test "publishes aggregated_chain event on rpc chain event" do

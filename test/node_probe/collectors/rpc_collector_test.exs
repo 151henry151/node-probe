@@ -19,9 +19,12 @@ defmodule NodeProbe.Collectors.RpcCollectorTest do
   end
 
   defp start_collector do
+    name = :"rpc_collector_test_#{System.unique_integer([:positive])}"
+
     {:ok, pid} =
       start_supervised(
-        {NodeProbe.Collectors.RpcCollector, [rpc: NodeProbe.Bitcoin.RpcCollectorMock]},
+        {NodeProbe.Collectors.RpcCollector,
+         [rpc: NodeProbe.Bitcoin.RpcCollectorMock, name: name]},
         id: make_ref()
       )
 

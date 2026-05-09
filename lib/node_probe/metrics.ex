@@ -13,6 +13,7 @@ defmodule NodeProbe.Metrics do
   @table :node_probe_metrics
   @latency_window_s 60
   @mempool_window_s 600
+  @recent_path_slots 50
 
   def start_link(_opts \\ []) do
     case :ets.whereis(@table) do
@@ -65,6 +66,68 @@ defmodule NodeProbe.Metrics do
     :ets.update_counter(@table, key, {2, 1}, {key, 0})
   end
 
+  @doc """
+  Apply one decoded loader JSON object into ETS. Keeps hot-path work out of PubSub so RPC
+  aggregation is not starved when syscall throughput is high.
+  """
+  def ingest_ebpf(%{} = event) do
+    case event["type"] do
+      "syscall" -> ingest_syscall_event(event)
+      "latency" -> ingest_latency_event(event)
+      _ -> :ok
+    end
+  end
+
+  def ingest_ebpf(_), do: :ok
+
+  defp ingest_syscall_event(event) do
+    syscall = event["syscall"] || "unknown"
+    increment_syscall(syscall)
+
+    filename = event["filename"] || ""
+
+    if filename != "" do
+      prefix = path_prefix(filename)
+      pk = {:path_prefix, prefix}
+      :ets.update_counter(@table, pk, {2, 1}, {pk, 0})
+      push_recent_path(filename, event["ts"])
+    end
+
+    :ok
+  end
+
+  defp ingest_latency_event(event) do
+    op =
+      case event["op"] do
+        "read" -> :read
+        "write" -> :write
+        _ -> :blk
+      end
+
+    record_latency(op, event["latency_ns"] || 0)
+    :ok
+  end
+
+  defp push_recent_path(filename, ts) do
+    slot =
+      :ets.update_counter(@table, :recent_path_cursor, {2, 1}, {:recent_path_cursor, 0})
+      |> rem(@recent_path_slots)
+
+    :ets.insert(@table, {{:recent_path, slot}, {filename, ts}})
+    :ok
+  end
+
+  defp path_prefix(filename) do
+    cond do
+      String.contains?(filename, "/blocks/") -> "blocks/"
+      String.contains?(filename, "/chainstate/") -> "chainstate/"
+      String.contains?(filename, "/wallets/") -> "wallets/"
+      String.contains?(filename, "/indexes/") -> "indexes/"
+      filename == "" -> "unknown"
+      true -> "other"
+    end
+  end
+
   def syscall_counts do
     :ets.match_object(@table, {{:syscall_count, :_}, :_})
     |> Map.new(fn {{_, name}, count} -> {name, count} end)
@@ -72,6 +135,19 @@ defmodule NodeProbe.Metrics do
 
   def reset_syscall_counts do
     :ets.match_delete(@table, {{:syscall_count, :_}, :_})
+  end
+
+  def path_prefix_counts do
+    :ets.match_object(@table, {{:path_prefix, :_}, :_})
+    |> Map.new(fn {{:path_prefix, name}, count} -> {name, count} end)
+  end
+
+  def recent_paths(limit \\ @recent_path_slots) do
+    :ets.match_object(@table, {{:recent_path, :_}, :_})
+    |> Enum.map(fn {_, {filename, ts}} -> %{filename: filename, ts: ts} end)
+    |> Enum.sort_by(& &1.ts, :desc)
+    |> Enum.uniq_by(& &1.filename)
+    |> Enum.take(limit)
   end
 
   # ---------------------------------------------------------------------------
